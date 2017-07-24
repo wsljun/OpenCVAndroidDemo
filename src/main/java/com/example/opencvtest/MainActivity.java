@@ -1,10 +1,12 @@
 package com.example.opencvtest;
 
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.drawable.BitmapDrawable;
+import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -19,6 +21,8 @@ import org.opencv.imgproc.Imgproc;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -28,7 +32,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private ImageView img;
     private final String[]	CH_list	= {
             "beijing", "cctv1", "cctv3", "cctv6", "diyicaijing", "dongfang",
-            "guangdong", "heilongjiang", "hubei", "hunan", "jiangsu",
+            "guangdong", "heilongjiang", "hubei","hubei0","hubeitb", "hunan", "jiangsu",
             "shandong", "shangshixinwen", "shangshiyule", "shenzhen",
             "tianjin", "zhejiang"									};
 
@@ -37,13 +41,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private  Bitmap srcBitmap , newBitmap ;
     private Mat  newMat ;
     private  Mat rgbMat ;
-
+    public static  int srcId = R.drawable.hubei5; // 5 ok
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         img = (ImageView) findViewById(R.id.img);
-        srcBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.hubei1);
+        srcBitmap = BitmapFactory.decodeResource(getResources(), srcId);
         newBitmap = Bitmap.createBitmap(srcBitmap.getWidth(), srcBitmap.getHeight(), Bitmap.Config.RGB_565);
     }
 
@@ -52,6 +56,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         switch (v.getId()){
             case R.id.btnStart:
                 recognize10f(srcBitmap);
+                break;
+            case R.id.btnStartService:
+                Intent intent = new Intent(getApplicationContext(),ScreenDiscernService.class);
+                startService(intent);
                 break;
             case R.id.btnCropLeft: //截取图标
 //                Mat mat = new Mat(srcBitmap.getHeight(), srcBitmap.getWidth(),
@@ -74,6 +82,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 newMat = recognizer.getGradient(rgbMat); //获取新的mat
                 Utils.matToBitmap(newMat,newBitmap);  // 根据新的mat ,转出新的bitmap
                 img.setImageBitmap(newBitmap);
+                break;
+            case R.id.btnGrayGradient: //计算灰度并计算梯度
+                newMat = recognizer.toGrayAndGradient(rgbMat); //获取新的mat
+                Utils.matToBitmap(newMat,newBitmap);  // 根据新的mat ,转出新的bitmap
+                img.setImageBitmap(newBitmap);
+                saveImage(newBitmap);
                 break;
             case R.id.btnLoadImage:
                 OpenCVLoader.initDebug();
@@ -148,6 +162,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         NameRef.put("guangdong", "广东卫视");
         NameRef.put("heilongjiang", "黑龙江卫视");
         NameRef.put("hubei", "湖北卫视");
+        NameRef.put("hubei0", "湖北卫视0");
+        NameRef.put("hubeitb", "湖北卫视台标");
         NameRef.put("hunan", "湖南卫视");
         NameRef.put("jiangsu", "江苏卫视");
         NameRef.put("shandong", "山东卫视");
@@ -214,5 +230,24 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return bitmap;
     }
 
+
+    private void saveImage(Bitmap bitmap){
+        if (bitmap != null) {
+            File file = new File(Environment.getExternalStorageDirectory() + "/" + "tvlogo");
+            if (!file.exists()) {
+                file.mkdirs();
+            }
+            String fname = "taibiao.jpg";
+            fname = file.getAbsolutePath() + "/"+fname;
+            try {
+                FileOutputStream out = new FileOutputStream(fname);
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+                Toast.makeText(this, "save ok", Toast.LENGTH_SHORT).show();
+                Log.d("opencvtest", "saveImage ok");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
 }

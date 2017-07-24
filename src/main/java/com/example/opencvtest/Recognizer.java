@@ -11,6 +11,8 @@ import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
+import org.opencv.features2d.ORB;
+import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
 public class Recognizer {
@@ -36,10 +38,10 @@ public class Recognizer {
 
 	private void initiate(String[] TV_l, Mat[] TV_t) {
 		TV_list = TV_l;
-		TV_templates = TV_t;		
+		TV_templates = TV_t;
 		Log.i(TAG, "========= recognizer initiated ========");
 	}
-	
+
 	// 计算梯度
 	public Mat getGradient(Mat in) {
 		Mat prewitt_x = new Mat(3, 3, CvType.CV_8SC1) {
@@ -97,7 +99,15 @@ public class Recognizer {
 	public Mat toGray(Mat in) {
 		Mat out = in.clone();
 		Imgproc.cvtColor(in, out, Imgproc.COLOR_RGB2GRAY);
+
 		return out;
+	}
+	// 灰度化
+	public Mat toGrayAndGradient(Mat in) {
+		Mat out = in.clone();
+		Imgproc.cvtColor(in, out, Imgproc.COLOR_RGB2GRAY);
+		Mat queryGL = getGradient(out);
+		return queryGL;
 	}
 
 	// 截取左侧台标
@@ -112,28 +122,53 @@ public class Recognizer {
 		String TVL = "unknown";
 		double th = 0.8;
 		double best_matchL = 10.0;
+		double temp_maxValL = 0.2;
 
 		Mat queryGL = getGradient(queryL);
 
 		for (int i = 0; i < TV_list.length; i++) {
 			Mat result = new Mat();
 			double minValL = 1.0;
+			double maxValL = 1.0;
 			try {
+				////
+				int result_cols =  queryGL.cols() - TV_templates[i].cols() + 1;
+				int result_rows = queryGL.rows() - TV_templates[i].rows() + 1;
+
+				result.create( result_rows, result_cols, CvType.CV_32FC1 );
+               ////
+
 				//http://docs.opencv.org/master/de/da9/tutorial_template_matching.html
 				Imgproc.matchTemplate(queryGL, TV_templates[i], result,
-						Imgproc.TM_SQDIFF_NORMED); //OpenCV在函数matchTemplate（）中实现模板匹配
+						Imgproc.TM_CCOEFF_NORMED); //OpenCV在函数matchTemplate（）中实现模板匹配
+				// CV_TM_CCOEFF_NORMED , TM_SQDIFF_NORMED
+
+				//! [normalize]
+//				Core.normalize( result, result, 0, 1, Core.NORM_MINMAX, -1, new Mat() );
+				//! [normalize]
+
 				Core.MinMaxLocResult mML = Core.minMaxLoc(result);//查找数组中的全局最小值和最大值
 				minValL = mML.minVal;
+				maxValL = mML.maxVal;
 				Log.i(TAG, "tv_name = " + TV_list[i] );
 				Log.i(TAG, "minLoc  = " + mML.minLoc );
 				Log.i(TAG, "minValL = " + minValL );
 				Log.i(TAG, "maxVal  = " + mML.maxVal );
-				if (minValL < th) {
-					if (best_matchL > minValL) {
-						best_matchL = minValL;
-						TVL = TV_list[i];
-					}
+//				if (minValL < th) {
+//					if (best_matchL > minValL) {
+//						best_matchL = minValL;
+//						TVL = TV_list[i];
+//					}
+//				}
+
+				// 取最大值
+				if( maxValL > temp_maxValL){
+					temp_maxValL = maxValL;
+					TVL = TV_list[i];
 				}
+
+
+
 			} catch (Exception e) {
 				Log.e(TAG, e.getMessage());
 
@@ -141,7 +176,7 @@ public class Recognizer {
 		}
 		return TVL;
 	}
-	
+
 	// 识别图像
 	public String recognize(Mat query) {
 		Mat queryLeft = toGray(query);
@@ -149,7 +184,7 @@ public class Recognizer {
 		Log.i(TAG, "========== " + result + " =============");
 		if (!(result.equals("unknown"))) {
 			return result;
-		} 
+		}
 		return "unknown";
 	}
 	/**
@@ -166,74 +201,81 @@ public class Recognizer {
 	}
 
 
-    Mat img = new Mat();
-    Mat templ = new Mat();
-    /* sample match*/
-    public void matchingMethod(Bitmap bitmap1, Bitmap bitmap0) {
-        Utils.bitmapToMat(bitmap1,img); // bitmap1 源文件
-        Utils.bitmapToMat(bitmap0,templ); // bitmap0 模板文件
+	Mat img = new Mat();
+	Mat templ = new Mat();
+	/* sample match*/
+	public void matchingMethod(Bitmap bitmap1, Bitmap bitmap0) {
+		Mat mat = new Mat(bitmap1.getHeight(), bitmap1.getWidth(),
+				CvType.CV_8UC1);
+		// 将Bitmap转化为Mat
+		Bitmap bmp32 = bitmap1.copy(Bitmap.Config.ARGB_8888, true);
+		Utils.bitmapToMat(bitmap1,img); // bitmap1 源文件
+		// ....
+		Utils.bitmapToMat(bitmap0,templ); // bitmap0 模板文件
 
-        Mat result = new Mat();
-        //! [copy_source]
-        /// Source image to display
-        Mat img_display = new Mat();
-        img.copyTo( img_display );
-        //! [copy_source]
+		Imgcodecs.imread("",Imgcodecs.IMREAD_COLOR); // filename , flag
 
-        //! [create_result_matrix]
-        /// Create the result matrix
-        int result_cols =  img.cols() - templ.cols() + 1;
-        int result_rows = img.rows() - templ.rows() + 1;
+		Mat result = new Mat();
+		//! [copy_source]
+		/// Source image to display
+		Mat img_display = new Mat();
+		img.copyTo( img_display );
+		//! [copy_source]
 
-        result.create( result_rows, result_cols, CvType.CV_32FC1 );
-        //! [create_result_matrix]
+		//! [create_result_matrix]
+		/// Create the result matrix
+		int result_cols =  img.cols() - templ.cols() + 1;
+		int result_rows = img.rows() - templ.rows() + 1;
 
-        //! [match_template]
-        /// Do the Matching and Normalize
+		result.create( result_rows, result_cols, CvType.CV_32FC1 );
+		//! [create_result_matrix]
+
+		//! [match_template]
+		/// Do the Matching and Normalize
 //        boolean method_accepts_mask = (Imgproc.TM_SQDIFF == match_method ||
 //                match_method == Imgproc.TM_CCORR_NORMED);
 //        if (use_mask && method_accepts_mask) {
 //            Imgproc.matchTemplate( img, templ, result, match_method, mask);
 //        } else
 //        {
-            Imgproc.matchTemplate( img, templ, result, Imgproc.TM_SQDIFF_NORMED); // Imgproc.TM_SQDIFF ,Imgproc.TM_SQDIFF_NORMED
+		Imgproc.matchTemplate( img, templ, result, Imgproc.TM_SQDIFF_NORMED); // Imgproc.TM_SQDIFF ,Imgproc.TM_SQDIFF_NORMED
 //        }
-        //! [match_template]
+		//! [match_template]
 
-        //! [normalize]
-        Core.normalize( result, result, 0, 1, Core.NORM_MINMAX, -1, new Mat() );
-        //! [normalize]
+		//! [normalize]
+//		Core.normalize( result, result, 0, 1, Core.NORM_MINMAX, -1, new Mat() );
+		//! [normalize]
 
-        //! [best_match]
-        /// Localizing the best match with minMaxLoc
-        double minVal; double maxVal;
-        Point matchLoc;
+		//! [best_match]
+		/// Localizing the best match with minMaxLoc
+		double minVal; double maxVal;
+		Point matchLoc;
 
-        Core.MinMaxLocResult mmr = Core.minMaxLoc( result );
-        //! [best_match]
+		Core.MinMaxLocResult mmr = Core.minMaxLoc( result );
+		//! [best_match]
 
-        //! [match_loc]
-        /// For SQDIFF and SQDIFF_NORMED, the best matches are lower values.
-        //  For all the other methods, the higher the better
+		//! [match_loc]
+		/// For SQDIFF and SQDIFF_NORMED, the best matches are lower values.
+		//  For all the other methods, the higher the better
 //        if( match_method  == Imgproc.TM_SQDIFF || match_method == Imgproc.TM_SQDIFF_NORMED )
 //        {
-            matchLoc = mmr.minLoc;
-        Log.d("Recognizer", "matchLoc = "+matchLoc);
+		matchLoc = mmr.minLoc;
+		Log.d("Recognizer", "matchLoc = "+matchLoc);
 		Log.d("Recognizer", "minVal   = "+mmr.minVal);
 		Log.d("Recognizer", "maxVal   = "+mmr.maxVal);
 //        }
 //        else
 //        { matchLoc = mmr.maxLoc; }
-        //! [match_loc]
+		//! [match_loc]
 
-        //! [imshow]
-        /// Show me what you got 显示源图像和结果矩阵。在最高可能的匹配区域周围绘制一个矩形：
-        Imgproc.rectangle(img_display, matchLoc, new Point(matchLoc.x + templ.cols(),
-                matchLoc.y + templ.rows()), new Scalar(0, 0, 0), 2, 8, 0);
-        Imgproc.rectangle(result, matchLoc, new Point(matchLoc.x + templ.cols(),
-                matchLoc.y + templ.rows()), new Scalar(0, 0, 0), 2, 8, 0);
-
-		result.convertTo(result, CvType.CV_8UC1, 255.0);
+		//! [imshow]
+		/// Show me what you got 显示源图像和结果矩阵。在最高可能的匹配区域周围绘制一个矩形：
+//        Imgproc.rectangle(img_display, matchLoc, new Point(matchLoc.x + templ.cols(),
+//                matchLoc.y + templ.rows()), new Scalar(0, 0, 0), 2, 8, 0);
+//        Imgproc.rectangle(result, matchLoc, new Point(matchLoc.x + templ.cols(),
+//                matchLoc.y + templ.rows()), new Scalar(0, 0, 0), 2, 8, 0);
+//
+//		  result.convertTo(result, CvType.CV_8UC1, 255.0);
 
 //        Image tmpImg = toBufferedImage(img_display);
 //        ImageIcon icon = new ImageIcon(tmpImg);
@@ -243,9 +285,47 @@ public class Recognizer {
 //        tmpImg = toBufferedImage(result);
 //        icon = new ImageIcon(tmpImg);
 //        resultDisplay.setIcon(icon);
-        //! [imshow]
+		//! [imshow]
 
-    }
+	}
+
+
+	public void matchingLogo(Mat img){
+
+	ORB orb = ORB.create();
+
+		orb.
+	}
+
+
+
+	/* img源图片 templ 模板 */
+	private double matchingMethod(Mat templ) {
+		Mat result = new Mat();
+		Mat img_display = new Mat();
+		img.copyTo( img_display );
+		int result_cols =  img.cols() - templ.cols() + 1;
+		int result_rows = img.rows() - templ.rows() + 1;
+		result.create( result_rows, result_cols, CvType.CV_32FC1 );
+
+		Imgproc.matchTemplate( img, templ, result, Imgproc.TM_CCOEFF); //match_method // TODO: 2017/7/20
+
+		Core.normalize( result, result, 0, 1, Core.NORM_MINMAX, -1, new Mat() );
+		double minVal; double maxVal;
+		Core.MinMaxLocResult mmr = Core.minMaxLoc( result );
+		//  For all the other methods, the higher the better
+//		if( match_method  == Imgproc.TM_SQDIFF || match_method == Imgproc.TM_SQDIFF_NORMED )
+//		{ matchLoc = mmr.minLoc; }
+//		else
+//		{
+//			matchLoc = mmr.maxLoc;
+//		}
+		maxVal = mmr.maxVal;
+		Log.d("Recognizer", "maxVal   = " + maxVal );
+
+		return maxVal;
+
+	}
 
 
 
